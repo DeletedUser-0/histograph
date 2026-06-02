@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histograph</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="config.js"></script>
+    <script src="script.js?v=20260602-1" defer></script>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header id="app-header">
+      <div class="header-left">
+        <select id="treeSelector" onchange="switchTree(this.value)"></select>
+        <input type="text" id="tree-rename-input" placeholder="Rename active tree..." oninput="renameActiveTree(this.value)" style="margin-left: 10px; padding: 5px; border: none; font-size: 0.85rem; width: 150px;">
+        <button onclick="createNewTree()">+ New Tree</button>
+      </div>
+      <div class="header-right">
+        <button onclick="toggleSettings()">⚙️ Settings</button>
+        <button id="info-toggle-btn" aria-label="Show hints" title="Show hints" onclick="toggleHints()">💡</button>
+      </div>
+    </header>
+    <div id="settings-overlay" class="hidden">
+      <div class="settings-content">
+        <h3>Settings</h3>
+        <label>Generations to show:</label>
+        <input type="range" id="genSlider" min="3" max="8" value="4" oninput="updateGenDisplay(this.value)">
+        <span id="genDisplay">4</span>
+        <button onclick="toggleSettings()" class="hud-btn" style="margin-top: 10px; width: 100%;">Close</button>
+      </div>
+    </div>
+    <div id="hints-overlay" class="hidden" role="dialog" aria-label="Hints">
+      <div class="hints-head">
+        <h3 id="hints-overlay-title">Dicas & Sugestões</h3>
+        <select id="langSelect" onchange="setHintsLanguage(this.value)" title="Language" style="padding:4px;border-radius:4px;">
+          <option value="pt">PT</option>
+          <option value="en">EN</option>
+        </select>
+        <button id="hints-close-btn" class="hints-close-btn" aria-label="Fechar dicas" onclick="toggleHints()">✕</button>
+      </div>
+      <div class="hints-body"></div>
+    </div>
+    <div class="app-main-layout">
+      <div id="viewport">
+        <div id="hud-controls">
+          <button id="back-to-root-btn" class="hud-btn" style="display: none;" onclick="resetTreePivot()">← Back to Main Tree (Yourself)</button>
+          <div id="zoom-indicator">Zoom: 90%</div>
+        </div>
+        <div id="canvas">
+          <div id="nodes-container"></div>
+          <svg id="tree-connections"></svg>
+        </div>
+      </div>
+      <aside id="ledger">
+        <div class="form-group">
+          <label for="first-name">First Name(s)</label>
+          <div class="input-container">
+            <input type="text" id="first-name" placeholder="TYPE HERE" oninput="updateCurrentData()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="surname">Surname(s)</label>
+          <div class="input-container">
+            <input type="text" id="surname" placeholder="TYPE HERE" oninput="updateCurrentData()">
+          </div>
+          <label class="checkbox-group">
+            <input type="checkbox" id="is-family-name" checked onchange="updateCurrentData()"> Surname is family name </label>
+        </div>
+        <div class="form-group">
+          <label for="birth-date">Date of birth</label>
+          <div class="input-container">
+            <input type="text" id="birth-date" placeholder="e.g., about 1700, before 1950" oninput="updateCurrentData()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="birth-place">Place of birth</label>
+          <div class="input-container">
+            <input type="text" id="birth-place" placeholder="INSERT SETTLEMENT, SUBDIVISION" oninput="updateCurrentData()">
+          </div>
+        </div>
+        <label class="checkbox-group">
+          <input type="checkbox" id="is-deceased" onchange="handleDeceasedToggle()"> Is this person deceased? </label>
+        <div id="deceased-fields" style="display: none;">
+          <div class="form-group">
+            <label for="death-date">Date of death</label>
+            <div class="input-container">
+              <input type="text" id="death-date" placeholder="e.g., 1765, after 1810" oninput="updateCurrentData()">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="death-place">Place of death</label>
+            <div class="input-container">
+              <input type="text" id="death-place" placeholder="INSERT SETTLEMENT, SUBDIVISION" oninput="updateCurrentData()">
+            </div>
+          </div>
+        </div>
+        <hr class="divider">
+        <div class="section-title">Relatives & Bonds</div>
+        <div class="form-group" style="margin-top: 5px;">
+          <label class="checkbox-group">
+            <input type="checkbox" id="got-parents" checked onchange="handleParentToggle()"> Got parents? </label>
+        </div>
+        <div id="marriage-fields" style="display: flex;">
+          <label class="checkbox-group">
+            <input type="checkbox" id="got-married" onchange="handleMarriageToggle()"> Got married? </label>
+          <div id="marriage-inputs-container" style="display: none;">
+            <div class="form-group">
+              <label for="marriage-date">When (Date)</label>
+              <div class="input-container">
+                <input type="text" id="marriage-date" placeholder="e.g., 1724, estimated" oninput="updateCurrentData()">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="marriage-place">Where (Place)</label>
+              <div class="input-container">
+                <input type="text" id="marriage-place" placeholder="INSERT SETTLEMENT" oninput="updateCurrentData()">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top: 10px;">
+          <label style="font-weight: 600;">Children</label>
+          <div id="children-list-container" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 5px;"></div>
+          <div style="display: flex; gap: 5px;">
+            <button class="hud-btn" style="padding: 4px 8px; font-size: 0.75rem; flex: 1;" onclick="addNewChild('Son')">+ Add Son</button>
+            <button class="hud-btn" style="padding: 4px 8px; font-size: 0.75rem; flex: 1;" onclick="addNewChild('Daughter')">+ Add Daughter</button>
+          </div>
+        </div>
+        <button class="action-btn" onclick="pivotTreeFocus()"> ☉ View tree starting from this person </button>
+        <div id="hints-container"></div>
+      </aside>
+    </div>
+  </body>
+</html>
